@@ -42,8 +42,10 @@ def captured_mask(node):
     config = node.get('config', {})
     mapping = {'centerX': 'x', 'centerY': 'y', 'width': 'width', 'height': 'height',
                'rotation': 'rotation', 'feather': 'feather', 'invert': 'invert', 'roundCorner': 'round_corner'}
-    j.require(isinstance(config, dict) and not set(config) - (set(mapping) | {'aspectRatio'}),
+    allowed = set(mapping) | {'aspectRatio'} | ({'expansion'} if j.nd.IS_CAPCUT else set())
+    j.require(isinstance(config, dict) and not set(config) - allowed,
               'Unverified native mask parameter')
+    j.require(config.get('expansion', 0) == 0, 'Mask expansion is not verified')
     aspect = config.get('aspectRatio', entry['aspect_ratio'])
     j.number(aspect, 'Mask aspect ratio', 0.001, 100)
     j.require(math.isclose(aspect, entry['aspect_ratio'], abs_tol=1e-7), 'Unverified mask aspect ratio')
@@ -54,8 +56,8 @@ def captured_mask(node):
 
 
 def captured_video_effect(node):
-    """Only the non-member light-shake capture has isolated pixel evidence."""
-    entry = resources.definition('effect/light-shake')
+    """Require the product-specific, locally captured non-member effect."""
+    entry = resources.definition('effect/subtle-shake' if j.nd.IS_CAPCUT else 'effect/light-shake')
     j.require(entry['usage']['paid_badge_observed'] is False, 'Member effect isolation is not verified')
     template = entry['material']
     for field in ('type', 'effect_id', 'resource_id', 'source_platform', 'apply_target_type', 'category_id'):
@@ -161,7 +163,11 @@ def local_supported_features(timeline):
     for node in materials.get('speeds', []):
         j.require(not node.get('curve_speed'), 'Curve speed export is not yet verified')
     for node in materials.get('transitions', []):
-        j.require(node.get('effect_id') == '6724845717472416269', 'Only the captured dissolve transition is verified')
+        key = 'transition/cross-fade' if j.nd.IS_CAPCUT else 'transition/dissolve'
+        template = resources.definition(key)['material']
+        j.require(all(node.get(field) == template[field] for field in
+                      ('type', 'effect_id', 'resource_id', 'third_resource_id', 'source_platform', 'is_overlap')),
+                  'Only the captured native transition identity is verified')
     for node in materials.get('canvases', []):
         j.require(node.get('type') == 'canvas_color', 'Only solid canvas backgrounds are verified')
     compound_ids = {node['id'] for node in materials.get('drafts', [])}
@@ -174,15 +180,19 @@ def local_supported_features(timeline):
         j.require(node.get('type') == 'none' or default_compound, 'Custom audio channel mappings are not yet verified')
     warnings = []
     if materials.get('transitions'):
-        warnings.append({
-            'code': 'native-dissolve-audio-overlap',
-            'message': 'Dissolve video is verified, but source audio can sum across the overlap; '
-                       'two same-phase source tones measured +6.03 dB. Review output audio; no gain correction is applied.',
-            'native_ui_audio_comparison': 'matched on the same synthetic timeline; +6.019 dB UI vs +6.030 dB headless',
-        })
+        if j.nd.IS_CAPCUT:
+            warnings.append({'code': 'native-transition-audio-overlap',
+                             'message': 'Native Cross Fade can overlap source audio. Review the output; no gain correction is applied.'})
+        else:
+            warnings.append({
+                'code': 'native-dissolve-audio-overlap',
+                'message': 'Dissolve video is verified, but source audio can sum across the overlap; '
+                           'two same-phase source tones measured +6.03 dB. Review output audio; no gain correction is applied.',
+                'native_ui_audio_comparison': 'matched on the same synthetic timeline; +6.019 dB UI vs +6.030 dB headless',
+            })
     if materials.get('video_effects'):
         warnings.append({'code': 'native-resource-use-limits',
-                         'resource': 'effect/light-shake',
+                         'resource': 'effect/subtle-shake' if j.nd.IS_CAPCUT else 'effect/light-shake',
                          'message': 'Isolated rendering is verified on the captured non-member sample; '
                                     'this does not grant redistribution or establish commercial rights.'})
     for key in sorted(captured_visuals):
@@ -191,7 +201,10 @@ def local_supported_features(timeline):
                          'message': 'Technical rendering verified on the same-machine local sample after successful native UI export. '
                                     'This does not acquire or prove ongoing account entitlement, commercial rights, or redistribution rights. '
                                     'Use only within existing native authorization; account data is not read.'})
-    return {'content_scope': 'local single-timeline video, text, audio, linear keyframes, captured dissolve, six static geometric masks and captured light-shake',
+    scope = ('local single-timeline video, text, audio, linear keyframes, six captured static geometric masks, Cross Fade and Subtle Shake'
+             if j.nd.IS_CAPCUT else
+             'local single-timeline video, text, audio, linear keyframes, captured dissolve, six static geometric masks and captured light-shake')
+    return {'content_scope': scope,
             'mask_export': 'six captured shapes verified on the synthetic sample; inspect each actual output',
             'visual_acceptance': 'requires viewing the exported output',
             'audio_acceptance': 'requires checking the exported audio; stream presence is not audio quality acceptance',
@@ -531,7 +544,8 @@ def run(build, out, bitrate=4_000_000, timeout=600):
                 'build_sha256': j.nd.digest(build / 'build.json'), 'runtime': runtime,
                 'settings': settings, 'ui_used': False, 'network_allowed': False,
                 'live_draft_written': False, 'external_ffmpeg_composition': False,
-                'renderer': 'Jianying native ExportService', 'container_writer': 'native MP4 writer',
+                'renderer': ('CapCut' if j.nd.IS_CAPCUT else 'Jianying') + ' native ExportService',
+                'container_writer': 'native MP4 writer',
                 'acceptance_boundaries': capabilities}
     try:
         staged, files = stage_timeline(timeline, record, build / 'draft', job)

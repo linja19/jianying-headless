@@ -11,7 +11,7 @@ import sys
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / 'engine'))
-from runtime_profiles import PROFILES, validate_identity
+from runtime_profiles import PROFILES, CAPCUT_LIBRARY_SHA, validate_identity, validate_capcut_identity
 
 
 def report(app):
@@ -35,10 +35,13 @@ def report(app):
         result['expected_library_sha256'] = PROFILES.get(result['app_version'])
     except (OSError, ValueError) as error:
         result.update(status='unavailable', reason=type(error).__name__,
-                      next_step='Check the official Jianying installation; no personal paths are included.')
+                      next_step='Check the official editor installation; no personal paths are included.')
         return result
     try:
-        validate_identity(info, result['library_sha256'])
+        capcut = result['bundle_id'] == 'com.lemon.lvoverseas'
+        if capcut:
+            result['expected_library_sha256'] = CAPCUT_LIBRARY_SHA
+        (validate_capcut_identity if capcut else validate_identity)(info, result['library_sha256'])
         result['identity_matched'] = True
     except ValueError:
         result['identity_matched'] = False
@@ -52,7 +55,7 @@ def report(app):
                 if line.startswith('TeamIdentifier=')]
         result['team_identifier'] = team[0] if len(team) == 1 else None
         result['official_signature_verified'] = (verified.returncode == details.returncode == 0
-                                                 and team == ['X2JNK7LY8J'])
+                                                 and team == ['22MMUN2RN5' if capcut else 'X2JNK7LY8J'])
     except (OSError, subprocess.SubprocessError):
         result['official_signature_verified'] = False
     result['status'] = ('identity-verified' if result['identity_matched']

@@ -4,7 +4,7 @@ import uuid
 
 import native_resources as resources
 
-TRANSITIONS = {'dissolve'}
+TRANSITIONS = {'dissolve', 'cross-fade'}
 MICROS = 1_000_000
 
 

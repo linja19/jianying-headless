@@ -16,6 +16,7 @@ from runtime_profiles import validate_resource_profile
 
 HERE = Path(__file__).resolve().parent
 CATALOG_SHA = '97af2df27463a9183fb1aa8f2ef534b37a644cb196f340fe88fdc50b456abde9'
+CAPCUT_CATALOG_SHA = 'd5253777e57c41405b9b00cdc12955522465ea13ea2c61a7463021d2a6800ac0'
 SHAPES = ('circle', 'rectangle', 'line', 'mirror', 'star', 'heart')
 
 
@@ -54,8 +55,9 @@ def verify_cached_manifest(entry, actual, message):
 
 
 def catalog():
-    path = HERE / 'native-resource-catalog.json'
-    require(rt.digest(path) == CATALOG_SHA, 'Native resource catalog changed; review capture provenance')
+    path = HERE / ('capcut-resource-catalog.json' if rt.IS_CAPCUT else 'native-resource-catalog.json')
+    require(rt.digest(path) == (CAPCUT_CATALOG_SHA if rt.IS_CAPCUT else CATALOG_SHA),
+            'Native resource catalog changed; review capture provenance')
     value = json.loads(path.read_bytes())
     require(value['schema'] == 'jy14-native-resource-catalog/v1', 'Unsupported native resource catalog')
     # Only relocate the captured user's home prefix. Relative cache locations,

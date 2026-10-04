@@ -12,6 +12,7 @@ import hashlib
 import json
 import math
 import os
+import platform
 from pathlib import Path
 import re
 import shutil
@@ -145,6 +146,21 @@ def blueprint():
     require(nd.digest(HERE / 'blueprint.json') == BLUEPRINT_SHA, 'Native blueprint changed; review its provenance')
     result = read_json(HERE / 'blueprint.json')
     require(result['runtime_manifest'] == nd.MANIFEST_SHA, 'Blueprint differs from its captured provenance')
+    if nd.IS_CAPCUT:
+        def adapt(value):
+            if isinstance(value, dict):
+                converted = {k: adapt(v) for k, v in value.items()}
+                if converted.get('os') == 'mac' and 'app_version' in converted:
+                    converted.update(app_id=359289, app_source='cc', app_version='9.5.0',
+                                     os_version=platform.mac_ver()[0])
+                return converted
+            if isinstance(value, list):
+                return [adapt(v) for v in value]
+            if isinstance(value, str):
+                return value.replace('/Applications/VideoFusion-macOS.app/', str(nd.APP) + '/')
+            return value
+        result = adapt(result)
+        result['timeline']['new_version'] = '187.0.0'
     return result
 
 
@@ -641,6 +657,9 @@ def copy_xattrs(source_attrs, destination, audit):
 
 
 def publish(out, audit, resume=False, verify_build_fn=None, verify_live_fn=None):
+    if nd.IS_CAPCUT:
+        from capcut_publish import publish as capcut_publish
+        return capcut_publish(out, audit, resume, verify_build_fn, verify_live_fn)
     verify_build_fn = verify_build_fn or verify_build
     verify_live_fn = verify_live_fn or verify_live
     out = Path(out).resolve(strict=True)
@@ -786,6 +805,7 @@ def verify_live(out):
 
 
 def cached_sound(name):
+    require(not nd.IS_CAPCUT, 'CapCut cached sound identities have not been captured; use a local audio file')
     require(name in CACHED_SOUNDS, 'Unknown cached sound; provide a known local audio file instead')
     expected = CACHED_SOUNDS[name]
     path = Path.home() / 'Movies/JianyingPro/User Data/Cache' / expected['relative']

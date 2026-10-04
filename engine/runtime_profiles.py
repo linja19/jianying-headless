@@ -1,12 +1,14 @@
 """Reviewed application identities; never infer compatibility from a version prefix."""
 PRIMARY_VERSION = '11.5.0'
+CAPCUT_PROFILE = 'capcut-headless-macos-9.5.0-286'
+CAPCUT_LIBRARY_SHA = '16d31a486390aa027cec024a6e7752f0cfa9576a48d097c5f6438f90534a6218'
 PROFILE_PREFIX = 'jy14-headless-macos-'
 PROFILES = {
     '11.5.0': '2041482a1aaeffa4d8bd69b836f8cf38807aaad8021bca410d567c59af3bccfa',
     '11.4.2': '632c8ddd09ff4a54f876cd8142eb505055ee26d944199506b230949b7e106bd1',
     '11.4.0': 'a1693070036a6678bb5db35f71d2105812ad24a2370e7e91c78712cc0d6455f3',
 }
-EXPORT_PROFILES = frozenset(PROFILE_PREFIX + v for v in ('11.5.0', '11.4.2'))
+EXPORT_PROFILES = frozenset([PROFILE_PREFIX + v for v in ('11.5.0', '11.4.2')] + [CAPCUT_PROFILE])
 RESOURCE_CAPTURE_PROFILE = PROFILE_PREFIX + '11.4.2'
 TIMELINE_SCHEMAS = frozenset((('185.0.0', 360000), ('187.0.0', 360000)))
 
@@ -16,9 +18,11 @@ def validate_timeline_schema(timeline, runtime_profile=None):
     if type(schema[1]) is not int or schema not in TIMELINE_SCHEMAS:
         raise ValueError('Unexpected native timeline version')
     if runtime_profile is not None:
-        known = {PROFILE_PREFIX + version for version in PROFILES}
+        if runtime_profile == CAPCUT_PROFILE and schema[0] != '187.0.0':
+            raise ValueError('CapCut only has a reviewed 187.0.0 timeline schema')
+        known = {PROFILE_PREFIX + version for version in PROFILES} | {CAPCUT_PROFILE}
         if runtime_profile not in known or (schema[0] == '187.0.0' and
-                                           runtime_profile != PROFILE_PREFIX + '11.5.0'):
+                                           runtime_profile not in {PROFILE_PREFIX + '11.5.0', CAPCUT_PROFILE}):
             raise ValueError('Native timeline schema is incompatible with this runtime profile')
     return schema
 
@@ -49,6 +53,15 @@ def validate_identity(info, fingerprint):
     return version
 
 
+def validate_capcut_identity(info, fingerprint):
+    if (info.get('CFBundleShortVersionString') != '9.5.0'
+            or info.get('CFBundleVersion') != '286'
+            or info.get('CFBundleIdentifier') != 'com.lemon.lvoverseas'
+            or fingerprint != CAPCUT_LIBRARY_SHA):
+        raise ValueError('Unsupported CapCut installation; only the measured 9.5.0 build 286 library is accepted')
+    return '9.5.0'
+
+
 def validate_export_profiles(build_profile, runtime_profile):
     if build_profile not in EXPORT_PROFILES or runtime_profile not in EXPORT_PROFILES:
         raise ValueError('No reviewed native export ABI for this build/runtime profile')
@@ -57,5 +70,8 @@ def validate_export_profiles(build_profile, runtime_profile):
 
 
 def validate_resource_profile(runtime_profile, capture_profile):
-    if capture_profile != RESOURCE_CAPTURE_PROFILE or runtime_profile not in EXPORT_PROFILES:
+    if runtime_profile == CAPCUT_PROFILE and capture_profile == CAPCUT_PROFILE:
+        return
+    if (capture_profile != RESOURCE_CAPTURE_PROFILE or runtime_profile not in EXPORT_PROFILES
+            or runtime_profile == CAPCUT_PROFILE):
         raise ValueError('Native resources need a reviewed runtime profile/capture pairing')
