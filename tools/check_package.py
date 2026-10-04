@@ -130,6 +130,8 @@ def main():
         require(digest(ROOT / 'bridge' / name) == expected, 'Runtime IO/codec pin differs: ' + name)
     require(digest(ROOT / 'engine/native-resource-catalog.json') ==
             literal(ROOT / 'engine/native_resources.py', 'CATALOG_SHA'), 'Resource catalog pin differs')
+    require(digest(ROOT / 'engine/capcut-resource-catalog.json') ==
+            literal(ROOT / 'engine/native_resources.py', 'CAPCUT_CATALOG_SHA'), 'CapCut resource catalog pin differs')
 
     if (ROOT / '.git').is_dir():
         tracked = subprocess.run(['git', 'ls-files', '-z'], cwd=ROOT, check=True, capture_output=True).stdout

@@ -57,8 +57,14 @@ class RuntimeProfiles(unittest.TestCase):
                 profiles.validate_export_profiles(profiles.PROFILE_PREFIX+a,profiles.PROFILE_PREFIX+b)
 
     def test_resource_pairing_keeps_capture_provenance(self):
-        for p in profiles.RESOURCE_PROFILES:
+        for p in profiles.RESOURCE_PROFILES - {profiles.CAPCUT_PROFILE}:
             profiles.validate_resource_profile(p,profiles.RESOURCE_CAPTURE_PROFILE)
+        profiles.validate_resource_profile(profiles.CAPCUT_PROFILE,profiles.CAPCUT_PROFILE)
+        with self.assertRaises(ValueError):
+            profiles.validate_resource_profile(profiles.CAPCUT_PROFILE,profiles.RESOURCE_CAPTURE_PROFILE)
+        for p in profiles.RESOURCE_PROFILES - {profiles.CAPCUT_PROFILE}:
+            with self.subTest(runtime=p), self.assertRaises(ValueError):
+                profiles.validate_resource_profile(p,profiles.CAPCUT_PROFILE)
         with self.assertRaises(ValueError):
             profiles.validate_resource_profile(profiles.PROFILE_PREFIX+'11.4.0',profiles.RESOURCE_CAPTURE_PROFILE)
         with self.assertRaises(ValueError):
@@ -82,6 +88,23 @@ class RuntimeProfiles(unittest.TestCase):
         for bad in [dict(new,new_version='188.0.0'),dict(new,version=360001),dict(new,version=360000.0),
                     dict(newest,new_version='190.0.0'),dict(newest,version=360001)]:
             with self.assertRaises(ValueError): profiles.validate_timeline_schema(bad)
+
+    def test_capcut_keeps_its_own_schema_and_capabilities(self):
+        runtime=profiles.CAPCUT_PROFILE
+        self.assertIn(runtime,profiles.EDIT_PROFILES)
+        self.assertIn(runtime,profiles.RESOURCE_PROFILES)
+        self.assertNotIn(runtime,profiles.UI_EXPORT_PROFILES)
+        profiles.validate_export_profiles(runtime,runtime)
+        timeline={'id':'capcut','new_version':'187.0.0','version':360000}
+        profiles.validate_timeline_schema(timeline,runtime)
+        self.assertIsNone(profiles.saved_schema_upgrade(timeline,timeline,runtime))
+        for version in ('185.0.0','189.0.0'):
+            with self.subTest(schema=version),self.assertRaises(ValueError):
+                profiles.validate_timeline_schema(dict(timeline,new_version=version),runtime)
+        for p in (profiles.PROFILE_PREFIX+'11.5.0',profiles.PROFILE_PREFIX+'11.6.0'):
+            for a,b in ((runtime,p),(p,runtime)):
+                with self.subTest(build=a,runtime=b),self.assertRaises(ValueError):
+                    profiles.validate_export_profiles(a,b)
 
     def test_ui_upgrade_is_reported_without_mutating_evidence(self):
         old={'id':'sample','new_version':'185.0.0','version':360000}

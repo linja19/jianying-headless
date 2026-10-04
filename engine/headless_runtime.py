@@ -10,14 +10,20 @@ import json
 import os
 from pathlib import Path
 import plistlib
+import platform
 import shutil
 import subprocess
 import sys
 from types import SimpleNamespace
-from runtime_profiles import PROFILES, PRIMARY_VERSION, validate_identity
+from runtime_profiles import PROFILES, PRIMARY_VERSION, CAPCUT_PROFILE, validate_identity, validate_capcut_identity
 
-APP = Path('/Applications/VideoFusion-macOS.app')
-DRAFT_ROOT = Path.home() / 'Movies/JianyingPro/User Data/Projects/com.lveditor.draft'
+PRODUCT = os.environ.get('JIANYING_HEADLESS_APP', 'jianying')
+if PRODUCT not in {'jianying', 'capcut'}:
+    raise ValueError('JIANYING_HEADLESS_APP must be jianying or capcut')
+IS_CAPCUT = PRODUCT == 'capcut'
+APP = Path('/Applications/CapCut.app' if IS_CAPCUT else '/Applications/VideoFusion-macOS.app')
+DRAFT_ROOT = Path.home() / ('Movies/CapCut/User Data/Projects/com.lveditor.draft' if IS_CAPCUT
+                            else 'Movies/JianyingPro/User Data/Projects/com.lveditor.draft')
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 BACKEND = PROJECT_ROOT / 'bridge'
 # Historical blueprint/codec provenance, not a statement of the current app version.
@@ -55,6 +61,8 @@ def doctor():
     if digest(BACKEND / 'SOURCE_MANIFEST.json') != IO_MANIFEST_SHA:
         raise ValueError('Packaged IO/codec source manifest changed')
     for name, expected in PINS.items():
+        if IS_CAPCUT and name == 'jy14_codec_hardened_11_4':
+            continue
         path = BACKEND / name
         if not path.is_file() or path.is_symlink():
             raise ValueError('IO/codec component unavailable: ' + name + '; build with tools/build_native_codec.py')
@@ -63,14 +71,18 @@ def doctor():
     info = plistlib.loads((APP / 'Contents/Info.plist').read_bytes())
     library = APP / 'Contents/Frameworks/libvideoeditor.dylib'
     fingerprint = digest(library)
-    version = validate_identity(info, fingerprint)
+    version = (validate_capcut_identity if IS_CAPCUT else validate_identity)(info, fingerprint)
+    if IS_CAPCUT and (platform.system() != 'Darwin' or platform.machine() != 'arm64'):
+        raise ValueError('CapCut native integration requires Apple Silicon macOS')
     if not all(shutil.which(name) for name in ('ffmpeg', 'ffprobe')):
         raise ValueError('ffmpeg and ffprobe are required')
-    return {'status': 'ok', 'app_version': version, 'app_build': version,
-            'primary_version': PRIMARY_VERSION, 'compatibility_mode': version != PRIMARY_VERSION,
-            'bundle_id': BUNDLE_ID, 'libvideoeditor_sha256': fingerprint,
-            'runtime_profile': 'jy14-headless-macos-' + version,
-            'codec_sha256': PINS['jy14_codec_hardened_11_4'],
+    primary = '9.5.0' if IS_CAPCUT else PRIMARY_VERSION
+    return {'status': 'ok', 'app_version': version, 'app_build': info['CFBundleVersion'],
+            'primary_version': primary, 'compatibility_mode': version != primary,
+            'bundle_id': info['CFBundleIdentifier'], 'libvideoeditor_sha256': fingerprint,
+            'runtime_profile': CAPCUT_PROFILE if IS_CAPCUT else 'jy14-headless-macos-' + version,
+            'codec_sha256': None if IS_CAPCUT else PINS['jy14_codec_hardened_11_4'],
+            'metadata_format': 'plain-json' if IS_CAPCUT else 'native-codec',
             'runtime_hashes_verified': True, 'network_called': False,
             'full_signature_check': 'required before live creation'}
 
@@ -82,11 +94,12 @@ def validate_runtime():
                             capture_output=True, timeout=180, env=env)
     details = subprocess.run(['/usr/bin/codesign', '-dv', '--verbose=4', str(APP)],
                              capture_output=True, text=True, timeout=30, env=env)
-    if result.returncode or details.returncode or ('TeamIdentifier=' + TEAM) not in details.stderr.splitlines():
+    team = '22MMUN2RN5' if IS_CAPCUT else TEAM
+    if result.returncode or details.returncode or ('TeamIdentifier=' + team) not in details.stderr.splitlines():
         raise ValueError('Native application signature or signing identity verification failed')
     if doctor() != before:
         raise ValueError('Native runtime changed while checking its signature')
-    return dict(before, team_identifier=TEAM, full_signature_check='passed')
+    return dict(before, team_identifier=team, full_signature_check='passed')
 
 
 def helper():
@@ -101,8 +114,32 @@ def helper():
     names = ('_decrypt_metadata_in_memory', '_encrypt_metadata_from_memory',
              '_ensure_editor_closed', '_snapshot_file', '_parse_strict_json',
              '_revalidate_snapshot', '_acquire_directory_transaction_lock',
-             '_release_directory_transaction_lock')
-    return SimpleNamespace(**{n: getattr(h, n) for n in names}, _validate_runtime_environment=validate_runtime)
+             '_release_directory_transaction_lock', 'ApplyError')
+    functions = {n: getattr(h, n) for n in names}
+    if IS_CAPCUT:
+        def decrypt(path):
+            snapshot = h._snapshot_file(Path(path), 'CapCut metadata')
+            return h._parse_strict_json(snapshot.content, 'CapCut plaintext metadata')
+
+        def encrypt(payload, path):
+            h._parse_strict_json(payload, 'CapCut plaintext metadata')
+            descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+            with os.fdopen(descriptor, 'wb') as stream:
+                stream.write(payload)
+                stream.flush()
+                os.fsync(stream.fileno())
+
+        def ensure_closed(confirm_editor_closed):
+            if not confirm_editor_closed:
+                raise ValueError('Explicit editor-closed confirmation is required')
+            executable = str(APP / 'Contents/MacOS/CapCut')
+            if any(command == executable or command.startswith(str(APP) + '/') for _, command in h._process_rows()):
+                raise ValueError('CapCut is running; save your work and quit before modifying its draft index')
+            return {'editor_closed': True}
+
+        functions.update(_decrypt_metadata_in_memory=decrypt, _encrypt_metadata_from_memory=encrypt,
+                         _ensure_editor_closed=ensure_closed)
+    return SimpleNamespace(**functions, _validate_runtime_environment=validate_runtime)
 
 
 def validate_compiled(value):

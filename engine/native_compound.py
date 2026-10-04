@@ -17,7 +17,8 @@ PROFILE = 'jy14-headless-macos-11.4.2'
 # back offline. This gates structure only. Home registration stays refused on
 # every runtime (require_publishable), and delivering a frozen snapshot still
 # needs an export path, which 11.6.0 does not have headlessly.
-SUPPORTED_PROFILES = frozenset((PROFILE, 'jy14-headless-macos-11.5.0', 'jy14-headless-macos-11.6.0'))
+SUPPORTED_PROFILES = frozenset((PROFILE, 'jy14-headless-macos-11.5.0', 'jy14-headless-macos-11.6.0',
+                                'capcut-headless-macos-9.5.0-286'))
 BLUEPRINT = Path(__file__).with_name('compound-blueprint.json')
 SUBDRAFT_TOKEN = '##_subdraft_placeholder_536E1D01-0D97-4295-AA34-0CC47A957B82_##/'
 SIDECARS = {'draft_file_path': 'draft_content.json', 'draft_cover_path': 'draft_cover.jpg',

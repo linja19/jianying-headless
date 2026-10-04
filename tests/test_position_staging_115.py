@@ -51,7 +51,12 @@ def fixture(target, y=.4, start=0, kind='text'):
                           'sha256': '0' * 64, 'width': 128, 'height': 72, 'has_audio': False}
     plan = {'canvas': {'width': 640, 'height': 360, 'fps': 30},
             'tracks': [{'type': kind, 'name': 'synthetic', 'segments': [spec]}]}
-    timeline, _ = j.timeline_for(plan, assets, target, j.identifier(), j.blueprint())
+    blueprint = j.blueprint()
+    for bucket, material in blueprint['text']['materials']:
+        if bucket == 'texts':
+            material['font_path'] = str(j.nd.APP / 'Contents/Resources/Font/SystemFont/zh-hans.ttf')
+            material['content'] = material['content'].replace('/Applications/VideoFusion-macOS.app/', str(j.nd.APP) + '/')
+    timeline, _ = j.timeline_for(plan, assets, target, j.identifier(), blueprint)
     timeline['new_version'] = '187.0.0'
     return timeline
 
@@ -69,6 +74,13 @@ class PositionStaging115Tests(unittest.TestCase):
         temporary = tempfile.TemporaryDirectory(prefix='position-staging-115-')
         self.addCleanup(temporary.cleanup)
         self.base = Path(temporary.name).resolve()
+        app = self.base / 'synthetic-app'
+        font = app / 'Contents/Resources/Font/SystemFont/zh-hans.ttf'
+        font.parent.mkdir(parents=True)
+        font.write_bytes(b'opaque synthetic font; no text rendering is claimed')
+        runtime_app = patch.object(j.nd, 'APP', app)
+        runtime_app.start()
+        self.addCleanup(runtime_app.stop)
         self.target = self.base / 'target'
         self.source_folder = self.base / 'source'
         self.source_folder.mkdir()

@@ -83,9 +83,28 @@ class FirstDraftTests(unittest.TestCase):
             result = json.loads((job / 'next-steps.json').read_text())
             self.assertFalse(result['draft_registered'])
             self.assertFalse(result['video_exported'])
-            self.assertEqual(start.shlex.split(result['commands']['publish'])[2], 'publish')
+            self.assertEqual(start.shlex.split(result['commands']['publish'])[2:5], ['--app', 'jianying', 'publish'])
             self.assertIn(result['commands']['export'], (job / 'next-steps.md').read_text())
         self.assertEqual(self.source.read_bytes(), b'unit test bytes')
+
+    def test_capcut_build_and_followup_commands_keep_selected_product(self):
+        calls = []
+        def success(command, timeout=60):
+            calls.append(command)
+            return subprocess.CompletedProcess(command, 0,
+                json.dumps(self.media) if command[0] == 'ffprobe' else '{}', '')
+        output = io.StringIO()
+        with patch.object(start, 'ROOT', self.folder), patch.object(start, 'run', side_effect=success), contextlib.redirect_stdout(output):
+            start.build(str(self.source), 'capcut')
+        self.assertIn('尚未写入CapCut首页', output.getvalue())
+        self.assertIn('再次退出CapCut', output.getvalue())
+        for command in calls:
+            if command[0] != 'ffprobe':
+                self.assertEqual(command[2:4], ['--app', 'capcut'])
+        job = next((self.folder / 'work').iterdir())
+        result = json.loads((job / 'next-steps.json').read_text())
+        self.assertEqual(result['app'], 'capcut')
+        self.assertTrue(all(start.shlex.split(c)[2:4] == ['--app', 'capcut'] for c in result['commands'].values()))
 
 
 if __name__ == '__main__':

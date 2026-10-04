@@ -22,7 +22,8 @@ PREFIX = profiles.PROFILE_PREFIX
 class SupportedProfileTests(unittest.TestCase):
     def test_exactly_the_runtimes_with_compound_evidence(self):
         self.assertEqual(compound.SUPPORTED_PROFILES,
-                         frozenset(PREFIX + v for v in ('11.4.2', '11.5.0', '11.6.0')))
+                         frozenset(PREFIX + v for v in ('11.4.2', '11.5.0', '11.6.0'))
+                         | {profiles.CAPCUT_PROFILE})
 
     def test_runtimes_without_compound_evidence_stay_out(self):
         for version in ('11.4.0', '11.5.1', '11.7.0', ''):
@@ -56,7 +57,7 @@ class StillRefusedTests(unittest.TestCase):
         # so the frozen-snapshot delivery stays unavailable there.
         self.assertNotIn(PREFIX + '11.6.0', profiles.EXPORT_PROFILES)
         self.assertEqual(profiles.EXPORT_PROFILES,
-                         frozenset(PREFIX + v for v in ('11.5.0', '11.4.2')))
+                         frozenset(PREFIX + v for v in ('11.5.0', '11.4.2')) | {profiles.CAPCUT_PROFILE})
 
 
 if __name__ == '__main__':

@@ -22,11 +22,15 @@ import tempfile
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / 'engine'))
 sys.path.insert(0, str(ROOT / 'tools'))
-from runtime_profiles import validate_identity
+from runtime_profiles import validate_identity, validate_capcut_identity
 from build_toolchain import select_toolchain
 
 APP = Path('/Applications/VideoFusion-macOS.app')
 ENTRY = ROOT / 'skills/yichen-jianying-edit/scripts/headless_draft.py'
+
+
+def entry_command(product, *arguments):
+    return [sys.executable, str(ENTRY), '--app', product, *arguments]
 
 
 def run(command, timeout=60):
@@ -43,7 +47,10 @@ def digest(path):
     return value.hexdigest()
 
 
-def check():
+def check(product='jianying'):
+    capcut = product == 'capcut'
+    label = 'CapCut' if capcut else '剪映'
+    app = Path('/Applications/CapCut.app') if capcut else APP
     rows = []
     def add(level, label, message):
         rows.append({'level': level, 'check': label, 'message': message})
@@ -65,29 +72,31 @@ def check():
                 + ' / linker ' + toolchain['linker'] + '；最终仍须校验编译产物')
         except (OSError, ValueError, KeyError, subprocess.SubprocessError) as error:
             # An already-verified codec does not need recompilation.
-            add('WARN' if (ROOT / 'bridge/jy14_codec_hardened_11_4').is_file() else 'FAIL',
+            add('WARN' if not capcut and (ROOT / 'bridge/jy14_codec_hardened_11_4').is_file() else 'FAIL',
                 '编译工具', str(error))
     try:
-        info = plistlib.loads((APP / 'Contents/Info.plist').read_bytes())
-        version = validate_identity(info, digest(APP / 'Contents/Frameworks/libvideoeditor.dylib'))
-        add('PASS', '剪映身份', version + '，程序库指纹匹配；完整签名由桥接构建和正式写入检查')
+        info = plistlib.loads((app / 'Contents/Info.plist').read_bytes())
+        version = (validate_capcut_identity if capcut else validate_identity)(
+            info, digest(app / 'Contents/Frameworks/libvideoeditor.dylib'))
+        add('PASS', label + '身份', version + '，程序库指纹匹配；完整签名由正式写入和导出检查')
     except (OSError, ValueError, KeyError) as error:
-        add('FAIL', '剪映身份', str(error) + '；需要匹配的官方安装，不能修改哈希绕过')
+        add('FAIL', label + '身份', str(error) + '；需要匹配的官方安装，不能修改哈希绕过')
     codec = ROOT / 'bridge/jy14_codec_hardened_11_4'
-    if not codec.exists():
+    if not capcut and not codec.exists():
         add('WARN', '桥接组件', '首次下载尚未构建；下一步运行 python3 tools/build_native_codec.py')
     else:
-        result = run([sys.executable, str(ENTRY), 'doctor'])
+        result = run(entry_command(product, 'doctor'))
         add('PASS' if result.returncode == 0 else 'FAIL', 'doctor',
             '运行检查通过' if result.returncode == 0 else result.stderr.strip())
-    draft_root = Path.home() / 'Movies/JianyingPro/User Data/Projects/com.lveditor.draft'
+    draft_root = Path.home() / ('Movies/CapCut/User Data/Projects/com.lveditor.draft' if capcut else
+                                'Movies/JianyingPro/User Data/Projects/com.lveditor.draft')
     try:
         index = json.loads((draft_root / 'root_meta_info.json').read_bytes())
         ready = index.get('root_path') == str(draft_root) and isinstance(index.get('all_draft_store'), list)
     except (OSError, ValueError, AttributeError):
         ready = False
-    add('PASS' if ready else 'WARN', '剪映首页',
-        '默认草稿目录已初始化' if ready else '登记首页前需先打开剪映、创建并保存一个空白工程、正常退出；自定义草稿位置暂不支持')
+    add('PASS' if ready else 'WARN', label + '首页',
+        '默认草稿目录已初始化' if ready else '登记首页前需先打开' + label + '、创建并保存一个空白工程、正常退出；自定义草稿位置暂不支持')
     failed = any(row['level'] == 'FAIL' for row in rows)
     print('检查未通过，请先处理 FAIL。' if failed else
           '基础条件检查通过。WARN 需按说明处理；这不是其他电脑、画面或声音验收。')
@@ -138,10 +147,11 @@ def make_plan(source, data, name):
                      'size': 8, 'y': -0.65, 'color': '#FFFFFF', 'border_color': '#000000', 'border_width': .05}]}]}
 
 
-def build(raw):
-    doctor = run([sys.executable, str(ENTRY), 'doctor'])
+def build(raw, product='jianying'):
+    label = 'CapCut' if product == 'capcut' else '剪映'
+    doctor = run(entry_command(product, 'doctor'))
     if doctor.returncode:
-        raise ValueError('doctor 未通过。先运行 check 和桥接构建。\n' + doctor.stderr)
+        raise ValueError('doctor 未通过。先运行 check 并处理环境问题。\n' + doctor.stderr)
     if raw is None:
         if not sys.stdin.isatty():
             raise ValueError('非交互运行需提供 --source 视频路径。')
@@ -161,7 +171,7 @@ def build(raw):
         ('build', ['--plan', str(job / 'plan.json'), '--out', str(job / 'build')]),
         ('verify-build', ['--build', str(job / 'build')]),
     ):
-        result = run([sys.executable, str(ENTRY), command] + extra, timeout=180)
+        result = run(entry_command(product, command, *extra), timeout=180)
         (job / (command + '.stdout.log')).write_text(result.stdout)
         (job / (command + '.stderr.log')).write_text(result.stderr)
         if result.returncode:
@@ -169,25 +179,25 @@ def build(raw):
     if digest(source) != before:
         raise ValueError('源视频发生变化；停止交付，记录保留在 ' + str(job))
     commands = {
-        'publish': [sys.executable, str(ENTRY), 'publish', '--build', str(job / 'build'), '--audit', str(job / 'publish-audit')],
-        'verify': [sys.executable, str(ENTRY), 'verify', '--build', str(job / 'build'), '--report', str(job / 'after-native-save.json')],
-        'export': [sys.executable, str(ENTRY), 'export', '--build', str(job / 'build'), '--out', str(job / 'export')],
+        'publish': entry_command(product, 'publish', '--build', str(job / 'build'), '--audit', str(job / 'publish-audit')),
+        'verify': entry_command(product, 'verify', '--build', str(job / 'build'), '--report', str(job / 'after-native-save.json')),
+        'export': entry_command(product, 'export', '--build', str(job / 'build'), '--out', str(job / 'export')),
     }
-    report = {'status': 'build-verified', 'name': plan['name'], 'build': str(job / 'build'),
+    report = {'status': 'build-verified', 'app': product, 'name': plan['name'], 'build': str(job / 'build'),
               'source_unchanged': True, 'draft_registered': False, 'video_exported': False,
               'commands': {key: shlex.join(value) for key, value in commands.items()}}
     (job / 'next-steps.json').write_text(json.dumps(report, ensure_ascii=False, indent=2) + '\n')
-    labels = {'publish': '保存工作并完全退出剪映后，登记到本机首页',
+    labels = {'publish': '保存工作并完全退出' + label + '后，登记到本机首页',
               'verify': '打开播放、保存退出、冷重开检查，再次退出后回读',
               'export': '可选：导出最初构建的快照，不包含后来手工修改'}
     notes = '# ' + plan['name'] + '\n'
-    for key, label in labels.items():
-        notes += '\n## ' + label + '\n\n```bash\n' + report['commands'][key] + '\n```\n'
+    for key, step_label in labels.items():
+        notes += '\n## ' + step_label + '\n\n```bash\n' + report['commands'][key] + '\n```\n'
     (job / 'next-steps.md').write_text(notes)
     print(json.dumps(report, ensure_ascii=False, indent=2))
-    print('\n尚未写入剪映首页。保存工作并完全退出剪映后，再复制执行下面这一行：\n' +
+    print('\n尚未写入' + label + '首页。保存工作并完全退出' + label + '后，再执行下面这一行：\n' +
           report['commands']['publish'])
-    print('\n打开、播放、保存、退出并冷重开检查后，再次退出剪映，执行：\n' + report['commands']['verify'])
+    print('\n打开、播放、保存、退出并冷重开检查后，再次退出' + label + '，执行：\n' + report['commands']['verify'])
     print('\n可选：需要 MP4 时导出最初快照（不含后续手工修改）：\n' + report['commands']['export'])
     print('\n以上可复制命令也保存在：' + str(job / 'next-steps.md'))
     return 0
@@ -195,13 +205,15 @@ def build(raw):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--app', choices=('jianying', 'capcut'),
+                        default=os.environ.get('JIANYING_HEADLESS_APP', 'jianying'))
     sub = parser.add_subparsers(dest='command', required=True)
     sub.add_parser('check', help='只读检查安装前提，不安装或修改系统')
     draft = sub.add_parser('build', help='从真实视频生成两秒草稿，不登记首页或导出')
     draft.add_argument('--source', help='本地视频；省略后交互拖入')
     args = parser.parse_args()
     try:
-        return check() if args.command == 'check' else build(args.source)
+        return check(args.app) if args.command == 'check' else build(args.source, args.app)
     except (OSError, ValueError, KeyError, subprocess.SubprocessError) as error:
         print('未完成：' + str(error), file=sys.stderr)
         return 1

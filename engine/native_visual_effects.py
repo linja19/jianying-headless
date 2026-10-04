@@ -10,9 +10,12 @@ import uuid
 
 import native_resources as resources
 
-NAMES = {'filter': set(), 'effect': {'light-shake'}, 'text': set()}
+NAMES = {'filter': set(), 'effect': {'light-shake', 'subtle-shake'}, 'text': set()}
 BUCKETS = {'filter': 'effects', 'effect': 'video_effects'}
-PARAMS = {'range': ('effects_adjust_range', .15), 'speed': ('effects_adjust_speed', .33)}
+PARAMS = {
+    'light-shake': {'range': ('effects_adjust_range', .15), 'speed': ('effects_adjust_speed', .33)},
+    'subtle-shake': {'speed': ('effects_adjust_speed', 1 / 3), 'blur': ('effects_adjust_blur', .5)},
+}
 
 
 def require(value, message):
@@ -37,8 +40,9 @@ def validate(spec, kind):
             numeric(spec.get('strength', 1), 'Filter strength')
         else:
             params = spec.get('params', {})
-            require(isinstance(params, dict) and not set(params) - set(PARAMS), 'Unsupported effect parameters')
-            for name, (_, default) in PARAMS.items():
+            native_params = PARAMS[spec['name']]
+            require(isinstance(params, dict) and not set(params) - set(native_params), 'Unsupported effect parameters')
+            for name, (_, default) in native_params.items():
                 numeric(params.get(name, default), 'Effect ' + name)
     if 'text_effect' in spec:
         require(kind == 'text', 'Text effects require a text segment')
@@ -64,7 +68,8 @@ def overlay_segment(kind, spec, target, track_index):
     if kind == 'filter':
         node['value'] = spec.get('strength', 1)
     else:
-        values = {native: spec.get('params', {}).get(name, default) for name, (native, default) in PARAMS.items()}
+        values = {native: spec.get('params', {}).get(name, default)
+                  for name, (native, default) in PARAMS[spec['name']].items()}
         for param in node['adjust_params']:
             param['value'] = values[param['name']]
     segment = deepcopy(entry['segment_template'])
@@ -108,11 +113,13 @@ def verify(segment, index, spec, kind, target, resolve_path, allow_native_cache=
         numeric(node.get('value', 1), 'Visual effect value')
         require(abs(node.get('value', 1) - expected) < 1e-5, 'Visual effect strength changed')
         if kind == 'effect':
+            native_params = PARAMS[spec['name']]
             params = node.get('adjust_params', [])
             values = {p['name']: p.get('value', p.get('default_value')) for p in params}
-            require(len(values) == len(params) == len(PARAMS) and set(values) == {p[0] for p in PARAMS.values()},
+            require(len(values) == len(params) == len(native_params)
+                    and set(values) == {p[0] for p in native_params.values()},
                     'Visual effect parameters changed')
-            for name, (native, default) in PARAMS.items():
+            for name, (native, default) in native_params.items():
                 numeric(values[native], 'Visual effect parameter')
                 require(abs(values[native] - spec.get('params', {}).get(name, default)) < 1e-5,
                         'Visual effect parameter changed: ' + name)

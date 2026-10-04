@@ -97,6 +97,9 @@ struct NativeAbi {
 // 11.4.2 constants are retained. Each new row requires disassembly and native
 // fixture validation; a matching marketing version alone is never sufficient.
 static const NativeAbi abi_profiles[] = {
+  {"capcut-9.5.0-286", "16d31a486390aa027cec024a6e7752f0cfa9576a48d097c5f6438f90534a6218",
+   0x2006a70, 0x255e094, 0x3d8, 0x7e8, 669,
+   "[LYRA] DraftService::restoreDraft driverRun, callback !"},
   {"11.5.0", "2041482a1aaeffa4d8bd69b836f8cf38807aaad8021bca410d567c59af3bccfa",
    0x21b86dc, 0x274b018, 0x3d8, 0x7e8, 669,
    "[draft_service.cpp:operator():669][LYRA] [LYRA] DraftService::restoreDraft driverRun, callback !"},
@@ -181,12 +184,19 @@ static void configureCapturedMasks(const std::shared_ptr<void>& wrapper) {
   if (!adapter) throw std::runtime_error("native adapter configuration missing");
   // addVideo reads this hub in both reviewed libraries: 11.4.2 0x3c97268,
   // 11.5.0 0x3d7a708 (field access at 0x3d7aacc).
+  // CapCut 9.5.0-286: addVideo 0x3a50678, field copy at 0x3a50a3c.
   if (!active_abi) throw std::runtime_error("native ABI was not selected");
+  if (active_abi->mask_hub == 0) throw std::runtime_error("mask adapter ABI has not been validated on this engine");
   auto& hub = *reinterpret_cast<std::string*>(reinterpret_cast<char*>(adapter.get()) + active_abi->mask_hub);
   if (!hub.empty()) throw std::runtime_error("unexpected native default effect resource path");
-  const std::filesystem::path root = "/Applications/VideoFusion-macOS.app/Contents/Resources/lumi_js_resources_video";
-  for (const char* relative : {"config.json", "js/video/video.js", "resources/feature-mask/config.json",
-                               "resources/lumi-hub/config.json"}) {
+  const bool capcut = std::string(active_abi->version).rfind("capcut-", 0) == 0;
+  const std::filesystem::path root =
+      capcut
+          ? "/Applications/CapCut.app/Contents/Resources/lumi_js_resources_video"
+          : "/Applications/VideoFusion-macOS.app/Contents/Resources/lumi_js_resources_video";
+  for (const char* relative : {"config.json", "js/video/video.js",
+                               capcut ? "resources/featureMask/config.json" : "resources/feature-mask/config.json",
+                               capcut ? "resources/lumi_hub/config.json" : "resources/lumi-hub/config.json"}) {
     auto file = root / relative;
     if (!std::filesystem::is_regular_file(file) || std::filesystem::is_symlink(file) ||
         std::filesystem::canonical(file) != file)
