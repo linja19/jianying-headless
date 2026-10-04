@@ -1,0 +1,4 @@
+interface:
+  display_name: "Hypit + CapCut"
+  short_description: "Render Hypit scenes and build editable CapCut drafts"
+  default_prompt: "Use $hypit-capcut to prepare this local Hypit or CapCut workflow, preserve existing projects, and clearly report editable layers and verification results."

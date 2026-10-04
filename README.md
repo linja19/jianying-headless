@@ -142,6 +142,11 @@ export JIANYING_HEADLESS_ROOT="/absolute/path/to/jianying-headless"
 安装说明见 [独立 Skill](skills/yichen-jianying-edit/README.md)。
 Skill 另收录于 [yichen-skills](https://github.com/mcncarl/yichen-skills/tree/main/yichen-jianying-edit)。
 
+CapCut 请求使用独立的 [hypit-capcut Skill](skills/hypit-capcut/README.md)，
+涵盖 CapCut 新建、独立副本编辑、本地导出和 Hypit 渲染交接，并提供八秒聊天示例计划模板。
+按其安装说明链接到 Codex 技能目录后，新会话可调用 `$hypit-capcut`；
+它不提供任意 Hypit 工程到 CapCut 的一键无损转换。
+
 ## 当前限制
 
 - 复合片段仅支持实验性的离线修改与冻结快照导出，尚不能交付为保存可靠的可编辑嵌套草稿。
