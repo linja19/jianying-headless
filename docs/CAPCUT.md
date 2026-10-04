@@ -21,6 +21,13 @@
 CapCut 明文草稿不需要 `tools/build_native_codec.py` 的剪映加解密组件。
 原生导出仍需匹配的编译工具链；Windows FFmpeg 后端不是 CapCut 草稿后端。
 
+## Agent Skill
+
+新会话可安装并使用 [hypit-capcut](../skills/hypit-capcut/README.md)。
+它明确选择 `--app capcut`，检查本地字体依赖，并区分 Hypit 预渲染画面和
+CapCut 独立可编辑图层；参考中保留已验证的八秒聊天示例及计划模板。
+Skill 不包含引擎或通用 Hypit 工程转换器，不因被调用而授权付费生成或云端上传。
+
 ## 开始使用
 
 在仓库根目录运行：
