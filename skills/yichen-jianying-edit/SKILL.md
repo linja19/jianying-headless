@@ -26,6 +26,9 @@ CapCut 国际版请求改读 [Hypit + CapCut Skill](../hypit-capcut/SKILL.md)，
 
 ## 选择入口
 
+- 在线 BGM：读 [Openverse / Freesound BGM](references/openverse-bgm.md)。用
+  `scripts/openverse_bgm.py` 搜索、明确选曲并试听；核对源许可后向 headless plan 添加
+  独立音乐轨。只用 CC0 / CC BY，不把音效自动挑选流程当作音乐选曲。
 - 新建：读 [无界面计划与命令](references/headless-macos.md)。直接创建独立草稿，
   不要求先在 UI 里准备模板；在线模板不在此发行范围。
 - Hypit 工程交接：读 [素材与字体交接](references/hypit-handoff.md)，将选定成片的素材、时间线和

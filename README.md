@@ -23,6 +23,7 @@ CapCut 使用独立版本身份、首页登记及效果资源目录，不将剪�
 | --- | --- |
 | 生成可编辑草稿 | 视频分段、多轨组合、变速、音量、画中画、字幕和标题 |
 | 导入本地素材 | 视频、PNG、JPEG、GIF、配音、音乐和音效 |
+| 在线 BGM 选曲 | Openverse 检索 Freesound CC0 / CC BY 音乐，试听预览、淡入淡出、循环及口播区间压低；见 [BGM 接入](skills/yichen-jianying-edit/references/openverse-bgm.md) |
 | 本地字体 | 新建文字或在副本中换字体，静态 OTF/TTF 随草稿保存；详见[字体说明](docs/LOCAL-FONTS.md) |
 | 基础动画 | 位置、缩放、旋转、透明度和音量的线性关键帧 |
 | 原生效果 | 六类静态几何蒙版、叠化转场、轻微抖动；需要匹配的本机资源与使用权限 |

@@ -25,6 +25,8 @@ description: 在匹配版本的 Apple Silicon Mac 上，用 Jianying Headless �
 ## 按任务读取
 
 - CapCut 新建、已有草稿独立副本、登记与导出：读 [CapCut 工作流](references/capcut.md)。
+- 需要在线 BGM：读 [Openverse / Freesound BGM](../yichen-jianying-edit/references/openverse-bgm.md)，
+  在 headless plan 中加入选定音乐后，再走 CapCut 的 build / verify-build / export。
 - Hypit 生成或读取成片，然后交给 CapCut：读 [Hypit 交接](references/hypit.md)。
   请求无付费示例时可用其中的八秒聊天动画和 [计划模板](assets/chat.plan.template.json)。
 - 支持范围和精确环境的权威记录：核心项目 [CAPCUT.md](../../docs/CAPCUT.md)。
